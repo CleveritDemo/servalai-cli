@@ -21,3 +21,10 @@ This install ships a curated set of subagents (in `agents/`). Delegate to them:
 
 The roster is maintained centrally — a ServalAI CLI update adds or removes agents
 fleet-wide, so everyone stays on the same curated tooling.
+
+## Available skills
+
+This install also bundles a curated set of skills (in `skills/`). Use them
+whenever a task matches their description — they encode best practices and
+reusable workflows for architecture, testing, security, cloud, DevOps, AI,
+data, design, and more. Skills are also updated fleet-wide with each CLI release.

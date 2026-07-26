@@ -33,8 +33,7 @@ For each diff or branch handed to you, deliver a verdict (`PASS` / `BLOCKED`) wi
 
 1. **Load skills**:
    - `aftdd-workflow` (always)
-   - `pulzen-context` (when in a Pulzen repo)
-   - `code-reviewer` (always)
+- `code-reviewer` (always)
    - `test-master` (always — you verify TDD compliance)
    - `secure-code-guardian` for security-adjacent concerns (delegate hard security findings to `@sec-ops-expert`).
    - `senior-designer` when reviewing front-end / UI code (delegate UX blockers to `@senior-designer` for design guidance).

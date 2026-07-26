@@ -10,5 +10,6 @@
         "dynamic/light":    { "name": "ServalAI light",    "tool_call": true, "limit": { "context": 131072, "output": 8192 } }
       }
     }
-  }
+  },
+  "skills": { "paths": ["./skills"] }
 }

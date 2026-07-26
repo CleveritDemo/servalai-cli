@@ -23,8 +23,7 @@ You produce design intent, interaction specifications, and UX direction — neve
 
 1. **Load skills first**:
    - `aftdd-workflow` (always)
-   - `pulzen-context` (when in a Pulzen repo)
-   - `senior-designer` (always)
+- `senior-designer` (always)
    - Contextually: `api-designer` (for API contracts affecting UX), `architecture-designer` (for system-level UX decisions)
 2. **Understand the user first** — before designing, articulate: who is the user, what is their goal, what is their context (device, environment, technical sophistication)?
 3. **Audit current state** — review existing UI, flows, or design system. Cite with `file_path:line_number` or screen/component references.

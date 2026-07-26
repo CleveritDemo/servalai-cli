@@ -22,8 +22,7 @@ You implement what `@fullstack-lt` delegates, following strict TDD. You ship cod
 
 1. **Load skills first**:
    - `aftdd-workflow` (always)
-   - `pulzen-context` (when in a Pulzen repo)
-   - `test-master` (always — you write tests first)
+- `test-master` (always — you write tests first)
    - `code-reviewer` (you self-review before requesting external review)
    - `secure-code-guardian` (you write secure by default)
    - Contextually load language-specific guidance via `context7` MCP if needed.

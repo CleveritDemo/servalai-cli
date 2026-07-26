@@ -38,8 +38,7 @@ Find what could break in production: secrets leaks, OWASP issues, RBAC over-priv
 
 1. **Load skills**:
    - `aftdd-workflow` (always)
-   - `pulzen-context` (when in a Pulzen repo)
-   - `security-reviewer` (always)
+- `security-reviewer` (always)
    - `secure-code-guardian` (always)
    - Contextually: `kubernetes-specialist` for K8s manifests, `terraform-engineer` for IaC, `monitoring-expert` for observability gaps, `sre-engineer` for reliability/DR concerns.
 2. **Read the change** via `git diff` / `git show`.
