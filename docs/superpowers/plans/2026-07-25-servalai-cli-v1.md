@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn parses_auth_with_token_flag() {
         let cli = Cli::try_parse_from(["serval", "auth", "--token", "aig_x"]).unwrap();
-        matches!(cli.command, Some(Command::Auth { token: Some(_) }));
+        assert!(matches!(cli.command, Some(Command::Auth { token: Some(_) })));
     }
 
     #[test]
