@@ -47,12 +47,28 @@ impl Config {
             std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {parent:?}: {e}"))?;
         }
         let body = toml::to_string_pretty(self).map_err(|e| format!("serialize config: {e}"))?;
-        std::fs::write(path, body).map_err(|e| format!("write {path:?}: {e}"))?;
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+                .map_err(|e| format!("open {path:?}: {e}"))?;
+            // Tighten perms before writing any secret content — mode() above only
+            // applies when the file is newly created, so a pre-existing file that
+            // was created with looser perms must be chmod'd while still empty.
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
                 .map_err(|e| format!("chmod 0600 {path:?}: {e}"))?;
+            f.write_all(body.as_bytes())
+                .map_err(|e| format!("write {path:?}: {e}"))?;
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(path, body).map_err(|e| format!("write {path:?}: {e}"))?;
         }
         Ok(())
     }
@@ -97,6 +113,21 @@ mod tests {
         let dir = tempdir().unwrap();
         let p = dir.path().join("config.toml");
         Config::default().save(&p).unwrap();
+        let mode = std::fs::metadata(&p).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_tightens_preexisting_loose_perms() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let p = dir.path().join("config.toml");
+        std::fs::write(&p, "old = true").unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let mut cfg = Config::default();
+        cfg.token = Some("aig_secret1234".to_string());
+        cfg.save(&p).unwrap();
         let mode = std::fs::metadata(&p).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
     }
