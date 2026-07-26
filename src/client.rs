@@ -21,9 +21,18 @@ pub trait Http {
 
 pub struct UreqHttp;
 
+/// A short connect timeout and a bounded read timeout so a black-holed network
+/// degrades to cache/default instead of hanging `serval` launch forever.
+fn agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_read(std::time::Duration::from_secs(20))
+        .build()
+}
+
 impl Http for UreqHttp {
     fn get_json(&self, url: &str, bearer: &str) -> Result<serde_json::Value, String> {
-        let mut req = ureq::get(url).set(
+        let mut req = agent().get(url).set(
             "User-Agent",
             &format!("serval/{}", env!("CARGO_PKG_VERSION")),
         );
@@ -38,7 +47,8 @@ impl Http for UreqHttp {
     }
 
     fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
-        let resp = ureq::get(url)
+        let resp = agent()
+            .get(url)
             .set(
                 "User-Agent",
                 &format!("serval/{}", env!("CARGO_PKG_VERSION")),
