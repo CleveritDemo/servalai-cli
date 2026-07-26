@@ -1,5 +1,6 @@
 mod config;
 mod constants;
+mod paths;
 
 use clap::{Parser, Subcommand};
 
