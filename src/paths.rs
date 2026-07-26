@@ -1,8 +1,6 @@
 //! Filesystem locations. Runtime asset paths (opencode, bundle) resolve relative
 //! to the running binary so a symlinked `serval` still finds its siblings.
 
-#![allow(dead_code)]
-
 use std::path::PathBuf;
 
 pub fn install_root() -> PathBuf {

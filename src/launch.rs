@@ -2,8 +2,6 @@
 //! bundled opencode binary. The env-building logic is pure and unit-tested; the
 //! exec itself is behind a trait so tests never spawn a real process.
 
-#![allow(dead_code)]
-
 use crate::constants::{PROVIDER_KEY, TOKEN_ENV};
 use std::path::Path;
 

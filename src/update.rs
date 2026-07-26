@@ -1,8 +1,6 @@
 //! Self-update: locate the latest GitHub release, download this platform's bundle,
 //! extract it into a versioned dir, and atomically repoint the `current` symlink.
 
-#![allow(dead_code)]
-
 use crate::client::Http;
 use crate::constants::RELEASES_LATEST_API;
 use flate2::read::GzDecoder;
@@ -109,6 +107,9 @@ mod tests {
                           "browser_download_url": "https://example.com/x.tar.gz" }
                     ]
                 }))
+            }
+            fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, String> {
+                Ok(vec![])
             }
         }
         let (tag, url) = latest_release(&FakeHttp).unwrap();

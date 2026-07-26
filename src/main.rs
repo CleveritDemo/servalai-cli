@@ -1,4 +1,5 @@
 mod client;
+mod commands;
 mod config;
 mod constants;
 mod launch;
@@ -34,8 +35,19 @@ enum Command {
 }
 
 fn main() {
-    let _cli = Cli::parse();
-    // wired in later tasks
+    let cli = Cli::parse();
+    let result = match cli.command {
+        Some(Command::Auth { token }) => commands::auth(token),
+        Some(Command::Sync) => commands::sync(),
+        Some(Command::Status) => commands::status(),
+        Some(Command::Logout) => commands::logout(),
+        Some(Command::Update) => commands::update_cmd(),
+        Some(Command::Code) | None => commands::code(vec![]),
+    };
+    if let Err(e) = result {
+        eprintln!("serval: {e}");
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]

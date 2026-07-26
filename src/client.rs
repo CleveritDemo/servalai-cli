@@ -16,22 +16,39 @@ pub struct FetchedConfig {
 
 pub trait Http {
     fn get_json(&self, url: &str, bearer: &str) -> Result<serde_json::Value, String>;
+    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String>;
 }
 
 pub struct UreqHttp;
 
 impl Http for UreqHttp {
     fn get_json(&self, url: &str, bearer: &str) -> Result<serde_json::Value, String> {
+        let mut req = ureq::get(url).set(
+            "User-Agent",
+            &format!("serval/{}", env!("CARGO_PKG_VERSION")),
+        );
+        if !bearer.is_empty() {
+            req = req.set("Authorization", &format!("Bearer {bearer}"));
+        }
+        let resp = req
+            .call()
+            .map_err(|e| format!("request to {url} failed: {e}"))?;
+        resp.into_json::<serde_json::Value>()
+            .map_err(|e| format!("invalid JSON from {url}: {e}"))
+    }
+
+    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
         let resp = ureq::get(url)
-            .set("Authorization", &format!("Bearer {bearer}"))
             .set(
                 "User-Agent",
                 &format!("serval/{}", env!("CARGO_PKG_VERSION")),
             )
             .call()
-            .map_err(|e| format!("request to {url} failed: {e}"))?;
-        resp.into_json::<serde_json::Value>()
-            .map_err(|e| format!("invalid JSON from {url}: {e}"))
+            .map_err(|e| format!("download {url} failed: {e}"))?;
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut resp.into_reader(), &mut buf)
+            .map_err(|e| format!("read body from {url}: {e}"))?;
+        Ok(buf)
     }
 }
 
@@ -105,6 +122,9 @@ mod tests {
             assert_eq!(bearer, "aig_token");
             Ok(self.body.clone())
         }
+        fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, String> {
+            Ok(vec![])
+        }
     }
 
     #[test]
@@ -134,6 +154,9 @@ mod tests {
     struct FailingHttp;
     impl Http for FailingHttp {
         fn get_json(&self, _u: &str, _b: &str) -> Result<serde_json::Value, String> {
+            Err("network down".to_string())
+        }
+        fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, String> {
             Err("network down".to_string())
         }
     }
@@ -168,10 +191,53 @@ mod tests {
                     serde_json::json!({ "email": "x@y.com", "models": [], "provider": "oops-not-an-object" }),
                 )
             }
+            fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, String> {
+                Ok(vec![])
+            }
         }
         let (p, email) = resolve_config(&StringProviderHttp, "https://w.dev", "t", None);
         assert!(p.is_object());
         assert_eq!(p["name"], "ServalAI");
         assert!(email.is_none());
+    }
+
+    /// Regression test for the Task 6 auth bug: an empty bearer must NOT produce
+    /// an `Authorization: Bearer ` header (GitHub's releases API 401s on that).
+    /// Uses a local loopback listener (not a real network call) so it's not flaky.
+    #[test]
+    fn get_json_omits_auth_header_when_bearer_empty() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(false).unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut buf = [0u8; 8192];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            let body = b"{}";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                std::str::from_utf8(body).unwrap()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            request
+        });
+
+        let url = format!("http://{addr}/");
+        let _ = UreqHttp.get_json(&url, "");
+        let request = server.join().expect("server thread panicked");
+
+        assert!(
+            !request.to_lowercase().contains("authorization"),
+            "expected no Authorization header for empty bearer, got request:\n{request}"
+        );
     }
 }

@@ -1,8 +1,6 @@
 //! Persistent CLI config (`~/.config/serval/config.toml`). Holds the token
 //! (0600) and the last provider config fetched from the Worker.
 
-#![allow(dead_code)]
-
 use crate::constants::DEFAULT_WORKER_URL;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -99,8 +97,10 @@ mod tests {
     fn save_then_load_roundtrips_token() {
         let dir = tempdir().unwrap();
         let p = dir.path().join("config.toml");
-        let mut cfg = Config::default();
-        cfg.token = Some("aig_secret1234".to_string());
+        let cfg = Config {
+            token: Some("aig_secret1234".to_string()),
+            ..Config::default()
+        };
         cfg.save(&p).unwrap();
         let back = Config::load(&p);
         assert_eq!(back.token.as_deref(), Some("aig_secret1234"));
@@ -125,8 +125,10 @@ mod tests {
         let p = dir.path().join("config.toml");
         std::fs::write(&p, "old = true").unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
-        let mut cfg = Config::default();
-        cfg.token = Some("aig_secret1234".to_string());
+        let cfg = Config {
+            token: Some("aig_secret1234".to_string()),
+            ..Config::default()
+        };
         cfg.save(&p).unwrap();
         let mode = std::fs::metadata(&p).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
@@ -134,8 +136,10 @@ mod tests {
 
     #[test]
     fn masked_token_shows_last4_only() {
-        let mut cfg = Config::default();
-        cfg.token = Some("aig_abcd1234".to_string());
+        let cfg = Config {
+            token: Some("aig_abcd1234".to_string()),
+            ..Config::default()
+        };
         assert_eq!(cfg.masked_token(), "••••1234");
         assert_eq!(Config::default().masked_token(), "—");
     }
