@@ -1,6 +1,7 @@
 mod client;
 mod config;
 mod constants;
+mod launch;
 mod paths;
 
 use clap::{Parser, Subcommand};
