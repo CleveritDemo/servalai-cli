@@ -11,14 +11,15 @@ pub fn build_env(
     token: &str,
     bundle_dir: &Path,
 ) -> Vec<(String, String)> {
-    // Clone the provider block and stamp in the live options (baseURL + apiKey).
+    let skills_dir = bundle_dir.join("skills");
     let mut provider = provider.clone();
     provider["options"] = serde_json::json!({
         "baseURL": worker_url.trim_end_matches('/'),
         "apiKey": token,
     });
     let content = serde_json::json!({
-        "provider": { PROVIDER_KEY: provider }
+        "provider": { PROVIDER_KEY: provider },
+        "skills": { "paths": [ skills_dir.to_string_lossy() ] }
     });
     vec![
         (
@@ -92,5 +93,6 @@ mod tests {
         assert_eq!(p["name"], "ServalAI");
         assert_eq!(p["options"]["baseURL"], "https://w.example.dev");
         assert_eq!(p["options"]["apiKey"], "aig_tok");
+        assert_eq!(content["skills"]["paths"][0].as_str().unwrap(), "/b/skills");
     }
 }
