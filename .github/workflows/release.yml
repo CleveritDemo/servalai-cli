@@ -45,7 +45,9 @@ jobs:
             | tar -xz -C "$stage"   # yields $stage/opencode
           # Seed the bundle config dir from the repo's default-bundle assets.
           cp -R assets/default-bundle/. "$stage/bundle/"
-          tar -C stage -czf "serval-${{ matrix.target }}.tar.gz" "serval-${{ matrix.target }}"
+          # Tarball must be FLAT (serval/opencode/bundle at top level): install.sh and the
+          # updater both extract with no --strip-components. Do not re-nest under a subdir.
+          tar -czf "serval-${{ matrix.target }}.tar.gz" -C "$stage" .
       - uses: softprops/action-gh-release@v2
         with:
           files: serval-${{ matrix.target }}.tar.gz
