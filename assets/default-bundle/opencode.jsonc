@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "cf-gateway-clever": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ServalAI",
+      "models": {
+        "dynamic/power":    { "name": "ServalAI power",    "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "dynamic/balanced": { "name": "ServalAI balanced", "tool_call": true, "limit": { "context": 200000, "output": 16384 } },
+        "dynamic/light":    { "name": "ServalAI light",    "tool_call": true, "limit": { "context": 131072, "output": 8192 } }
+      }
+    }
+  }
+}
