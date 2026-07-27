@@ -1,5 +1,5 @@
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://opencode.ai/config/v2.json",
   "provider": {
     "cf-gateway-clever": {
       "npm": "@ai-sdk/openai-compatible",
@@ -15,26 +15,22 @@
     "servers": {
       "context7": {
         "type": "local",
-        "command": ["npx", "-y", "@context7/mcp"],
-        "description": "Search up-to-date library documentation and code examples"
+        "command": ["npx", "-y", "@context7/mcp"]
       },
       "github": {
         "type": "local",
         "command": ["npx", "-y", "@github/github-mcp-server"],
-        "description": "GitHub API integration (PRs, issues, repos, code search)",
         "environment": {
           "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_TOKEN}"
         }
       },
       "kubernetes": {
         "type": "remote",
-        "url": "http://localhost:8001/mcp",
-        "description": "Kubernetes cluster access via kubectl proxy"
+        "url": "http://localhost:8001/mcp"
       },
       "sequential-thinking": {
         "type": "local",
-        "command": ["npx", "-y", "@anthropic/modelcontextprotocol/server-sequential-thinking"],
-        "description": "Break down complex problems into structured reasoning steps"
+        "command": ["npx", "-y", "@anthropic/modelcontextprotocol/server-sequential-thinking"]
       }
     }
   },
