@@ -54,8 +54,10 @@ pub fn repoint_current(versions: &Path, current: &Path, tag: &str) -> Result<(),
 }
 
 /// Fetch the latest release tag + this platform's asset download URL.
+/// Uses the GITHUB_TOKEN env var if set (avoids rate limiting on CI/shared IPs).
 pub fn latest_release(http: &dyn Http) -> Result<(String, String), String> {
-    let release = http.get_json(RELEASES_LATEST_API, "")?;
+    let token = std::env::var("GITHUB_TOKEN").unwrap_or_default();
+    let release = http.get_json(RELEASES_LATEST_API, &token)?;
     let tag = release["tag_name"]
         .as_str()
         .ok_or("release JSON missing tag_name")?

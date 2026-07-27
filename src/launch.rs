@@ -31,6 +31,15 @@ pub fn build_env(
     ]
 }
 
+pub fn build_ai_env(worker_url: &str, token: &str) -> Vec<(String, String)> {
+    let base = worker_url.trim_end_matches('/');
+    vec![
+        ("OPENAI_API_BASE_URL".to_string(), format!("{base}/v1")),
+        ("OPENAI_API_KEY".to_string(), token.to_string()),
+        (TOKEN_ENV.to_string(), token.to_string()),
+    ]
+}
+
 pub trait Launcher {
     fn exec(&self, program: &Path, args: &[String], env: &[(String, String)])
         -> Result<(), String>;

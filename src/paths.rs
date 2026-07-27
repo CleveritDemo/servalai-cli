@@ -16,6 +16,10 @@ pub fn opencode_bin() -> PathBuf {
     install_root().join("opencode")
 }
 
+pub fn pi_bin() -> PathBuf {
+    install_root().join("pi")
+}
+
 pub fn bundle_dir() -> PathBuf {
     install_root().join("bundle")
 }

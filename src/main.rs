@@ -54,6 +54,22 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Launch oh-my-pi preconfigured with ServalAI.
+    #[command(
+        long_about = "Launch oh-my-pi preconfigured with ServalAI as the provider.\n\nAll arguments after `--` are forwarded to pi.\n\nExamples:\n  serval pi\n  serval pi -- --help"
+    )]
+    Pi {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Launch aider preconfigured with ServalAI (requires aider on PATH).
+    #[command(
+        long_about = "Launch aider preconfigured with ServalAI as the provider.\n\nRequires aider to be installed (pip install aider-chat or brew install aider).\nAll arguments after `--` are forwarded to aider.\n\nExamples:\n  serval aider\n  serval aider -- --help"
+    )]
+    Aider {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Print serval version and exit.
     #[command(name = "version", hide = true)]
     Version,
@@ -72,6 +88,8 @@ fn main() {
         Some(Command::Logout) => commands::logout(),
         Some(Command::Update) => commands::update_cmd(),
         Some(Command::Code { args }) => commands::code(args),
+        Some(Command::Pi { args }) => commands::pi(args),
+        Some(Command::Aider { args }) => commands::aider(args),
         Some(Command::Version) => {
             println!(
                 "serval {}\n\nServalAI — Cleverit's company-funded model gateway CLI\n\n\
@@ -94,7 +112,9 @@ fn main() {
                     "serval: '{first}' is not a serval command.\n\n\
                      Did you mean one of these?\n\n\
                      \x20 serval auth       Store your token and get started\n\
-                     \x20 serval             Start coding (default)\n\
+                     \x20 serval             Start coding (opencode)\n\
+                     \x20 serval pi          Start oh-my-pi\n\
+                     \x20 serval aider       Start aider\n\
                      \x20 serval status      Show your configuration\n\n\
                      Run `serval --help` to see all commands."
                 );
@@ -187,5 +207,35 @@ mod tests {
         let cli = Cli::try_parse_from(["serval", "opencode"]).unwrap();
         assert!(cli.command.is_none());
         assert_eq!(cli.args, vec!["opencode".to_string()]);
+    }
+
+    #[test]
+    fn pi_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "pi"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Pi { .. })));
+    }
+
+    #[test]
+    fn aider_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "aider"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Aider { .. })));
+    }
+
+    #[test]
+    fn pi_subcommand_captures_trailing_args() {
+        let cli = Cli::try_parse_from(["serval", "pi", "--", "--model", "gpt4"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Pi { args }) if args == vec!["--model".to_string(), "gpt4".to_string()]
+        ));
+    }
+
+    #[test]
+    fn aider_subcommand_captures_trailing_args() {
+        let cli = Cli::try_parse_from(["serval", "aider", "--", "--help"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Aider { args }) if args == vec!["--help".to_string()]
+        ));
     }
 }

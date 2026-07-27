@@ -6,7 +6,8 @@ permissions:
   contents: write
 env:
   CARGO_TERM_COLOR: always
-  OPENCODE_VERSION: "1.18.7"   # pinned opencode bundled per release
+  OPENCODE_VERSION: "1.18.7"
+  OMP_VERSION: "v17.1.6"
 jobs:
   build:
     name: ${{ matrix.target }}
@@ -14,10 +15,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { target: x86_64-unknown-linux-musl,  os: ubuntu-latest,  ocode: linux-x64-musl }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest,  ocode: linux-arm64-musl }
-          - { target: x86_64-apple-darwin,        os: macos-latest,   ocode: darwin-x64 }
-          - { target: aarch64-apple-darwin,       os: macos-latest,   ocode: darwin-arm64 }
+          - { target: x86_64-unknown-linux-musl,  os: ubuntu-latest,  ocode: linux-x64-musl,     omp_ocode: linux-x64 }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest,  ocode: linux-arm64-musl,  omp_ocode: linux-arm64 }
+          - { target: x86_64-apple-darwin,        os: macos-latest,   ocode: darwin-x64,        omp_ocode: darwin-x64 }
+          - { target: aarch64-apple-darwin,       os: macos-latest,   ocode: darwin-arm64,      omp_ocode: darwin-arm64 }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -39,17 +40,23 @@ jobs:
           stage="stage/serval-${{ matrix.target }}"
           mkdir -p "$stage/bundle"
           cp "target/${{ matrix.target }}/release/serval" "$stage/serval"
+
           # Fetch the pinned opencode binary for this platform.
-          # Linux releases are .tar.gz, macOS CLI releases are .zip.
           if [ "${{ runner.os }}" = "macOS" ]; then
             curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-${{ matrix.ocode }}.zip" \
               > opencode.zip
-            unzip -q opencode.zip -d "$stage"   # yields $stage/opencode
+            unzip -q opencode.zip -d "$stage"
             rm opencode.zip
           else
             curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-${{ matrix.ocode }}.tar.gz" \
-              | tar -xz -C "$stage"   # yields $stage/opencode
+              | tar -xz -C "$stage"
           fi
+
+          # Fetch oh-my-pi binary (same asset name on all platforms).
+          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${OMP_VERSION}/omp-${{ matrix.omp_ocode }}" \
+            -o "$stage/pi"
+          chmod +x "$stage/pi"
+
           # Seed the bundle config dir from the repo's default-bundle assets.
           cp -R assets/default-bundle/. "$stage/bundle/"
           # Tarball must be FLAT (serval/opencode/bundle at top level): install.sh and the

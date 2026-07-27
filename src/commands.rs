@@ -3,7 +3,7 @@
 
 use crate::client::{resolve_config, UreqHttp};
 use crate::config::Config;
-use crate::launch::{build_env, ExecLauncher, Launcher};
+use crate::launch::{build_ai_env, build_env, ExecLauncher, Launcher};
 use crate::{paths, update};
 use std::io::Write;
 
@@ -150,4 +150,26 @@ pub fn code(passthrough: Vec<String>) -> Result<(), String> {
     );
     let env = build_env(&provider, &cfg.worker_url, &token, &paths::bundle_dir());
     ExecLauncher.exec(&paths::opencode_bin(), &passthrough, &env)
+}
+
+pub fn pi(passthrough: Vec<String>) -> Result<(), String> {
+    let cfg = load();
+    let token = require_token(&cfg)?;
+    let env = build_ai_env(&cfg.worker_url, &token);
+    ExecLauncher.exec(&paths::pi_bin(), &passthrough, &env)
+}
+
+pub fn aider(passthrough: Vec<String>) -> Result<(), String> {
+    let cfg = load();
+    let token = require_token(&cfg)?;
+    let aider_bin = which::which("aider").map_err(|_| {
+        "aider not found on PATH.\n\n\
+         Install it first:\n\
+         \x20 pip install aider-chat\n\
+         or\n\
+         \x20 brew install aider\n\n\
+         Then run `serval aider` again."
+    })?;
+    let env = build_ai_env(&cfg.worker_url, &token);
+    ExecLauncher.exec(&aider_bin, &passthrough, &env)
 }
