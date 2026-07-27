@@ -9,7 +9,14 @@ mod update;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "serval", version, about = "ServalAI CLI")]
+#[command(
+    name = "serval",
+    version,
+    about = "ServalAI — Cleverit's company-funded model gateway CLI",
+    long_about = "One install, one token, and you're coding with a fully-configured opencode\nsession backed by ServalAI.  No config files, no env vars — everything is\ninjected at launch without touching your personal opencode setup.\n\nGet your token at https://cleverit-support.cleveritgroup.com, then run:\n\n    serval auth\n    serval",
+    after_help = "Run `serval status` to see your current configuration.",
+    disable_help_subcommand = true
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -21,20 +28,27 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Store your ServalAI token.
+    /// Store your ServalAI token and validate it against the gateway.
+    #[command(
+        long_about = "Store your ServalAI token and validate it against the gateway.\n\nIf --token is omitted, you'll be prompted interactively.\nGet your token at https://cleverit-support.cleveritgroup.com"
+    )]
     Auth {
+        /// Token string (if not provided you'll be prompted).
         #[arg(long)]
         token: Option<String>,
     },
-    /// Refresh provider config from the Worker.
+    /// Refresh your provider config from the ServalAI gateway.
     Sync,
-    /// Show version, pinned opencode, and resolved identity.
+    /// Show CLI version, bundled opencode, gateway URL, and identity.
     Status,
-    /// Clear the stored token.
+    /// Clear your stored token from this machine.
     Logout,
-    /// Self-update to the latest release.
+    /// Download and install the latest serval release.
     Update,
-    /// Launch opencode preconfigured (default action).
+    /// Launch your preconfigured opencode session (this is the default action).
+    #[command(
+        long_about = "Launch opencode preconfigured with ServalAI as the provider.\n\nRunning `serval` without a subcommand does the same thing.\nAll arguments after `--` are forwarded to opencode.\n\nExamples:\n  serval code\n  serval code -- --print-logs\n  serval"
+    )]
     Code {
         /// Extra arguments forwarded to opencode.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -54,7 +68,12 @@ fn main() {
         None => commands::code(cli.args),
     };
     if let Err(e) = result {
-        eprintln!("serval: {e}");
+        let hint = if e.contains("haven't authenticated") || e.contains("no token") {
+            "\nHint: get your token at https://cleverit-support.cleveritgroup.com, then run `serval auth`.\n"
+        } else {
+            "\n"
+        };
+        eprintln!("serval: {e}{hint}");
         std::process::exit(1);
     }
 }

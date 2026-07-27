@@ -11,7 +11,7 @@ fn status_runs_without_token() {
     let out = serval().arg("status").output().unwrap();
     assert!(out.status.success());
     let s = String::from_utf8(out.stdout).unwrap();
-    assert!(s.contains("serval"));
+    assert!(s.contains("ServalAI"));
     assert!(s.contains("token"));
 }
 
@@ -20,5 +20,5 @@ fn code_without_token_errors_cleanly() {
     let out = serval().arg("code").output().unwrap();
     assert!(!out.status.success());
     let err = String::from_utf8(out.stderr).unwrap();
-    assert!(err.contains("no token"));
+    assert!(err.contains("haven't authenticated"));
 }

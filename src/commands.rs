@@ -7,14 +7,19 @@ use crate::launch::{build_env, ExecLauncher, Launcher};
 use crate::{paths, update};
 use std::io::Write;
 
+const TOKEN_URL: &str = "https://cleverit-support.cleveritgroup.com";
+
 fn load() -> Config {
     Config::load(&paths::config_file())
 }
 
 fn require_token(cfg: &Config) -> Result<String, String> {
-    cfg.token
-        .clone()
-        .ok_or_else(|| "no token — run `serval auth` (get yours from Mi Portal)".to_string())
+    cfg.token.clone().ok_or_else(|| {
+        format!(
+            "you haven't authenticated yet. Run `serval auth` to get started.\n\n\
+             Get your token at {TOKEN_URL}"
+        )
+    })
 }
 
 pub fn auth(token: Option<String>) -> Result<(), String> {
@@ -22,20 +27,21 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
     let token = match token {
         Some(t) => t,
         None => {
-            eprint!("Paste your ServalAI token: ");
+            eprint!("Paste your ServalAI token (from {TOKEN_URL}): ");
             std::io::stderr().flush().ok();
             let mut s = String::new();
             std::io::stdin()
                 .read_line(&mut s)
-                .map_err(|e| format!("read token: {e}"))?;
+                .map_err(|e| format!("could not read token: {e}"))?;
             s.trim().to_string()
         }
     };
     if token.is_empty() {
-        return Err("empty token".to_string());
+        return Err(format!(
+            "no token provided.\nGet yours at {TOKEN_URL} and run `serval auth` again."
+        ));
     }
     cfg.token = Some(token.clone());
-    // Validate + warm the cache against the Worker.
     let (provider, email) = resolve_config(
         &UreqHttp,
         &cfg.worker_url,
@@ -46,8 +52,11 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
     cfg.cached_email = email.clone();
     cfg.save(&paths::config_file())?;
     match email {
-        Some(e) => println!("Authenticated as {e}."),
-        None => println!("Token saved (could not reach the Worker to confirm identity)."),
+        Some(e) => println!("Authenticated as {e}. Ready — run `serval` to start coding."),
+        None => println!(
+            "Token saved, but the gateway could not be reached to confirm your identity.\n\
+             Your provider config uses the built-in defaults. Run `serval sync` later to refresh."
+        ),
     }
     Ok(())
 }
@@ -66,20 +75,25 @@ pub fn sync() -> Result<(), String> {
         cfg.cached_email = email;
     }
     cfg.save(&paths::config_file())?;
-    println!("Config synced.");
+    println!("Provider config synced from the gateway.");
     Ok(())
 }
 
 pub fn status() -> Result<(), String> {
     let cfg = load();
-    println!("serval        {}", env!("CARGO_PKG_VERSION"));
-    println!("opencode      {}", opencode_version());
-    println!("worker        {}", cfg.worker_url);
-    println!("token         {}", cfg.masked_token());
+    println!("ServalAI CLI");
+    println!("━━━━━━━━━━━━");
+    println!("  version      v{}", env!("CARGO_PKG_VERSION"));
+    println!("  opencode     {}", opencode_version());
+    println!("  gateway      {}", cfg.worker_url);
+    println!("  token        {}", cfg.masked_token());
     println!(
-        "identity      {}",
+        "  identity     {}",
         cfg.cached_email.as_deref().unwrap_or("—")
     );
+    if cfg.token.is_none() {
+        println!("\nRun `serval auth` to get started.");
+    }
     Ok(())
 }
 
@@ -97,25 +111,31 @@ pub fn logout() -> Result<(), String> {
     let mut cfg = load();
     cfg.token = None;
     cfg.save(&paths::config_file())?;
-    println!("Logged out.");
+    println!(
+        "Logged out. Your token has been cleared from this machine.\n\
+         Run `serval auth` again to reconnect."
+    );
     Ok(())
 }
 
 pub fn update_cmd() -> Result<(), String> {
     use crate::client::Http;
-    eprintln!("Checking for updates...");
+    eprintln!("Checking for updates…");
     let (tag, url) = update::latest_release(&UreqHttp)?;
     let current = format!("v{}", env!("CARGO_PKG_VERSION"));
     if !update::needs_update(&current, &tag) {
-        println!("Already up to date ({current}).");
+        println!("You're on the latest version ({tag}).");
         return Ok(());
     }
-    println!("Update available: {current} -> {tag}");
+    println!(
+        "Update available: {current} → {tag}\n\
+         Downloading…"
+    );
     let bytes = UreqHttp.get_bytes(&url)?;
     let dest = paths::versions_dir().join(&tag);
     update::extract_tar_gz(&bytes, &dest)?;
     update::repoint_current(&paths::versions_dir(), &paths::current_link(), &tag)?;
-    println!("Updated to {tag}. Run `serval` to use it.");
+    println!("Updated to {tag}. Run `serval` to start your new session.");
     Ok(())
 }
 
