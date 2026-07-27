@@ -1,6 +1,6 @@
 [package]
 name = "servalai-cli"
-version = "0.1.4"
+version = "0.1.6"
 edition = "2021"
 rust-version = "1.85"
 description = "ServalAI CLI — one-install, token-only access to company models via opencode"

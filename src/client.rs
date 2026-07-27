@@ -39,9 +39,16 @@ impl Http for UreqHttp {
         if !bearer.is_empty() {
             req = req.set("Authorization", &format!("Bearer {bearer}"));
         }
-        let resp = req
-            .call()
-            .map_err(|e| format!("request to {url} failed: {e}"))?;
+        let resp = req.call().map_err(|e| -> String {
+            match e {
+                ureq::Error::Status(403, _) => {
+                    "GitHub API rate limit hit. Set the GITHUB_TOKEN environment variable.\n\
+                     Also check your release is public and accessible."
+                        .to_string()
+                }
+                other => format!("request to {url} failed: {other}"),
+            }
+        })?;
         resp.into_json::<serde_json::Value>()
             .map_err(|e| format!("invalid JSON from {url}: {e}"))
     }
@@ -54,7 +61,12 @@ impl Http for UreqHttp {
                 &format!("serval/{}", env!("CARGO_PKG_VERSION")),
             )
             .call()
-            .map_err(|e| format!("download {url} failed: {e}"))?;
+            .map_err(|e| match e {
+                ureq::Error::Status(403, _) => {
+                    "GitHub API rate limit hit. Try again later.".to_string()
+                }
+                other => format!("download {url} failed: {other}"),
+            })?;
         let mut buf = Vec::new();
         std::io::Read::read_to_end(&mut resp.into_reader(), &mut buf)
             .map_err(|e| format!("read body from {url}: {e}"))?;
