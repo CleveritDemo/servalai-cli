@@ -28,3 +28,20 @@ This install also bundles a curated set of skills (in `skills/`). Use them
 whenever a task matches their description — they encode best practices and
 reusable workflows for architecture, testing, security, cloud, DevOps, AI,
 data, design, and more. Skills are also updated fleet-wide with each CLI release.
+
+## Cross-tool agent sync
+
+Every opencode agent in `agents/` is automatically converted to oh-my-pi format
+when `serval pi` starts. The converter:
+
+1. Reads markdown files from the opencode `agents/` directory
+2. Strips opencode-specific YAML fields (`mode`, `color`, `permission`)
+3. Writes new YAML with Pi-compatible fields (`name`, `description`, `tools`, `model`)
+4. Preserves the full body text unchanged
+5. Sets restricted tool access (`read/grep/glob/web_search` only) for read-only agents
+
+**When adding a new agent:** write it in opencode format in `agents/` — both
+opencode and Pi will pick it up automatically. No duplicate work needed.
+
+**When removing an agent:** delete from `agents/` — the converter will stop
+writing it to `~/.omp/agents/` on next `serval pi` launch.

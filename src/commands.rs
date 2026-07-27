@@ -155,6 +155,7 @@ pub fn code(passthrough: Vec<String>) -> Result<(), String> {
 pub fn pi(passthrough: Vec<String>) -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
+    sync_pi_agents(&paths::bundle_dir())?;
     let env = build_ai_env(&cfg.worker_url, &token);
     ExecLauncher.exec(&paths::pi_bin(), &passthrough, &env)
 }
@@ -172,4 +173,68 @@ pub fn aider(passthrough: Vec<String>) -> Result<(), String> {
     })?;
     let env = build_ai_env(&cfg.worker_url, &token);
     ExecLauncher.exec(&aider_bin, &passthrough, &env)
+}
+
+fn sync_pi_agents(bundle_dir: &std::path::Path) -> Result<(), String> {
+    let src = bundle_dir.join("agents");
+    let dest = dirs::home_dir()
+        .ok_or("no home directory")?
+        .join(".omp")
+        .join("agents");
+    if !src.exists() || !src.is_dir() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&dest).map_err(|e| format!("mkdir {dest:?}: {e}"))?;
+    for entry in std::fs::read_dir(&src).map_err(|e| format!("read agents dir {src:?}: {e}"))? {
+        let entry = entry.map_err(|e| format!("read entry: {e}"))?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("md") {
+            continue;
+        }
+        let body = std::fs::read_to_string(&path)
+            .map_err(|e| format!("read {:?}: {e}", path.file_name().unwrap_or_default()))?;
+        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("agent");
+        let converted = convert_agent_to_pi(name, &body);
+        let dest_path = dest.join(path.file_name().unwrap());
+        std::fs::write(&dest_path, converted).map_err(|e| format!("write {dest_path:?}: {e}"))?;
+    }
+    Ok(())
+}
+
+fn convert_agent_to_pi(name: &str, opencode_md: &str) -> String {
+    let desc = opencode_md
+        .lines()
+        .find(|l| l.starts_with("description:"))
+        .and_then(|l| l.split("description:").nth(1))
+        .map(|s| s.trim().trim_matches('"'))
+        .unwrap_or(name);
+
+    let is_read_only =
+        opencode_md.contains("edit: deny") || opencode_md.contains("Never writes production code");
+
+    let tools = if is_read_only {
+        "  - read\n  - grep\n  - glob\n  - web_search"
+    } else {
+        "  - read\n  - grep\n  - glob\n  - bash\n  - edit\n  - write\n  - lsp\n  - web_search"
+    };
+
+    // Strip opencode-specific frontmatter and use Pi's YAML format
+    let body_lines: Vec<&str> = opencode_md
+        .lines()
+        .skip_while(|l| l != &"---")
+        .skip(1)
+        .skip_while(|l| l != &"---")
+        .skip(1)
+        .collect();
+    let body = body_lines.join("\n").trim().to_string();
+
+    format!(
+        "---\n\
+         name: {name}\n\
+         description: \"{desc}\"\n\
+         tools:\n{tools}\n\
+         model:\n  - \"@balanced\"\n\
+         ---\n\n\
+         {body}\n"
+    )
 }

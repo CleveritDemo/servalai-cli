@@ -81,15 +81,15 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
 
-    let result = match cli.command {
-        Some(Command::Auth { token }) => commands::auth(token),
-        Some(Command::Sync) => commands::sync(),
-        Some(Command::Status) => commands::status(),
-        Some(Command::Logout) => commands::logout(),
-        Some(Command::Update) => commands::update_cmd(),
-        Some(Command::Code { args }) => commands::code(args),
-        Some(Command::Pi { args }) => commands::pi(args),
-        Some(Command::Aider { args }) => commands::aider(args),
+    match cli.command {
+        Some(Command::Auth { token }) => run(commands::auth(token)),
+        Some(Command::Sync) => run(commands::sync()),
+        Some(Command::Status) => run(commands::status()),
+        Some(Command::Logout) => run(commands::logout()),
+        Some(Command::Update) => run(commands::update_cmd()),
+        Some(Command::Code { args }) => run(commands::code(args)),
+        Some(Command::Pi { args }) => run(commands::pi(args)),
+        Some(Command::Aider { args }) => run(commands::aider(args)),
         Some(Command::Version) => {
             println!(
                 "serval {}\n\nServalAI — Cleverit's company-funded model gateway CLI\n\n\
@@ -97,16 +97,14 @@ fn main() {
                  Run `serval auth` to get started.",
                 env!("CARGO_PKG_VERSION")
             );
-            return;
         }
         Some(Command::Help) => {
             let mut cmd = <Cli as clap::CommandFactory>::command();
             cmd.print_help().ok();
             println!();
-            return;
         }
         None => match cli.args.first().map(String::as_str) {
-            Some("--") => commands::code(cli.args[1..].to_vec()),
+            Some("--") => run(commands::code(cli.args[1..].to_vec())),
             Some(first) if !first.starts_with('-') => {
                 eprintln!(
                     "serval: '{first}' is not a serval command.\n\n\
@@ -120,9 +118,12 @@ fn main() {
                 );
                 std::process::exit(1);
             }
-            _ => commands::code(cli.args),
+            _ => run(commands::code(cli.args)),
         },
-    };
+    }
+}
+
+fn run(result: Result<(), String>) {
     if let Err(e) = result {
         let hint = if e.contains("haven't authenticated") || e.contains("no token") {
             "\nHint: get your token at https://cleverit-support.cleveritgroup.com, then run `serval auth`.\n"
