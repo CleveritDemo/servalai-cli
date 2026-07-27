@@ -54,10 +54,17 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Print serval version and exit.
+    #[command(name = "version", hide = true)]
+    Version,
+    /// Print this help and exit.
+    #[command(name = "help", hide = true)]
+    Help,
 }
 
 fn main() {
     let cli = Cli::parse();
+
     let result = match cli.command {
         Some(Command::Auth { token }) => commands::auth(token),
         Some(Command::Sync) => commands::sync(),
@@ -65,7 +72,36 @@ fn main() {
         Some(Command::Logout) => commands::logout(),
         Some(Command::Update) => commands::update_cmd(),
         Some(Command::Code { args }) => commands::code(args),
-        None => commands::code(cli.args),
+        Some(Command::Version) => {
+            println!(
+                "serval {}\n\nServalAI — Cleverit's company-funded model gateway CLI\n\n\
+                 Tip: run `serval status` to see your configuration and bundled opencode version.\n\
+                 Run `serval auth` to get started.",
+                env!("CARGO_PKG_VERSION")
+            );
+            return;
+        }
+        Some(Command::Help) => {
+            let mut cmd = <Cli as clap::CommandFactory>::command();
+            cmd.print_help().ok();
+            println!();
+            return;
+        }
+        None => match cli.args.first().map(String::as_str) {
+            Some("--") => commands::code(cli.args[1..].to_vec()),
+            Some(first) if !first.starts_with('-') => {
+                eprintln!(
+                    "serval: '{first}' is not a serval command.\n\n\
+                     Did you mean one of these?\n\n\
+                     \x20 serval auth       Store your token and get started\n\
+                     \x20 serval             Start coding (default)\n\
+                     \x20 serval status      Show your configuration\n\n\
+                     Run `serval --help` to see all commands."
+                );
+                std::process::exit(1);
+            }
+            _ => commands::code(cli.args),
+        },
     };
     if let Err(e) = result {
         let hint = if e.contains("haven't authenticated") || e.contains("no token") {
@@ -132,5 +168,24 @@ mod tests {
         let cli = Cli::try_parse_from(["serval", "status"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Status)));
         assert!(cli.args.is_empty());
+    }
+
+    #[test]
+    fn version_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "version"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Version)));
+    }
+
+    #[test]
+    fn help_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "help"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Help)));
+    }
+
+    #[test]
+    fn unknown_word_captured_as_passthrough() {
+        let cli = Cli::try_parse_from(["serval", "opencode"]).unwrap();
+        assert!(cli.command.is_none());
+        assert_eq!(cli.args, vec!["opencode".to_string()]);
     }
 }
