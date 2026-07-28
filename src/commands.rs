@@ -1,7 +1,4 @@
-//! One function per subcommand. Each loads Config from `paths::config_file()`,
-//! does its work, and returns Result<(), String> (main maps Err → exit 1).
-
-use crate::client::{resolve_config, UreqHttp};
+use crate::client::{fetch_config, fetch_usage, health_check, resolve_config, UreqHttp};
 use crate::config::Config;
 use crate::launch::{build_ai_env, build_env, ExecLauncher, Launcher};
 use crate::{paths, update};
@@ -139,6 +136,215 @@ pub fn update_cmd() -> Result<(), String> {
     Ok(())
 }
 
+pub fn ping() -> Result<(), String> {
+    let cfg = load();
+    let status = health_check(&UreqHttp, &cfg.worker_url)
+        .map_err(|e| format!("gateway unreachable: {e}"))?;
+    println!("Gateway: {}", cfg.worker_url);
+    println!("Status:  {status}");
+
+    // Try to fetch provider config to show available models
+    if let Ok(token) = require_token(&cfg) {
+        match fetch_config(&UreqHttp, &cfg.worker_url, &token) {
+            Ok(fc) if !fc.models.is_empty() => {
+                println!("\nAvailable models:");
+                for m in &fc.models {
+                    println!("  {m}");
+                }
+                println!("\nIdentified as: {}", fc.email);
+            }
+            _ => {}
+        }
+    } else {
+        println!("\nRun `serval auth` to authenticate and see your models.");
+    }
+    Ok(())
+}
+
+pub fn models() -> Result<(), String> {
+    let cfg = load();
+    let token = require_token(&cfg)?;
+    let fc = fetch_config(&UreqHttp, &cfg.worker_url, &token)
+        .map_err(|e| format!("could not fetch model list: {e}"))?;
+
+    println!("ServalAI Models");
+    println!("━━━━━━━━━━━━━━━");
+    println!("Account: {}", fc.email);
+    println!();
+    for m in &fc.models {
+        let description = match m.as_str() {
+            s if s.contains("dynamic/power") => "Hard tasks, architecture, large refactors",
+            s if s.contains("dynamic/balanced") => "Everyday work (default)",
+            s if s.contains("dynamic/light") => "Quick, mechanical tasks",
+            _ => "",
+        };
+        println!("  {m}");
+        if !description.is_empty() {
+            println!("    {description}");
+        }
+    }
+    Ok(())
+}
+
+pub fn usage() -> Result<(), String> {
+    let cfg = load();
+    let token = require_token(&cfg)?;
+    let data = fetch_usage(&UreqHttp, &cfg.worker_url, &token)?;
+
+    println!("ServalAI Usage");
+    println!("━━━━━━━━━━━━━━");
+    if let Some(tokens) = data.get("total_tokens").and_then(|v| v.as_u64()) {
+        println!("  Total tokens:   {tokens}");
+    }
+    if let Some(sessions) = data.get("session_count").and_then(|v| v.as_u64()) {
+        println!("  Sessions:       {sessions}");
+    }
+    if let Some(model) = data.get("last_model").and_then(|v| v.as_str()) {
+        println!("  Last model:     {model}");
+    }
+    if let Some(at) = data.get("last_used_at").and_then(|v| v.as_str()) {
+        println!("  Last used:      {at}");
+    }
+    Ok(())
+}
+
+pub fn doctor() -> Result<(), String> {
+    let cfg = load();
+    println!("ServalAI Doctor");
+    println!("━━━━━━━━━━━━━━━");
+
+    // 1. Config file
+    let config_path = paths::config_file();
+    println!("  Config file:  {}", config_path.display());
+    if config_path.exists() {
+        println!("    ✓ exists");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = std::fs::metadata(&config_path) {
+                let mode = meta.permissions().mode() & 0o777;
+                if mode == 0o600 {
+                    println!("    ✓ permissions 0600");
+                } else {
+                    println!("    ⚠ permissions {mode:03o} (should be 0600)");
+                }
+            }
+        }
+    } else {
+        println!("    — not created yet");
+    }
+
+    // 2. Token
+    let token_status = match &cfg.token {
+        Some(t) if t.len() > 8 => {
+            let masked = format!("{}…{}", &t[..4], &t[t.len() - 4..]);
+            format!("✓ stored ({masked})")
+        }
+        Some(t) => format!("✓ stored ({} chars)", t.len()),
+        None => "✗ missing — run `serval auth`".to_string(),
+    };
+    println!("  Token:        {token_status}");
+
+    // 3. Gateway
+    println!("  Gateway:      {}", cfg.worker_url);
+    match health_check(&UreqHttp, &cfg.worker_url) {
+        Ok(s) => println!("    ✓ reachable (status: {s})"),
+        Err(e) => println!("    ✗ unreachable: {e}"),
+    }
+
+    // 4. Bundled binaries
+    println!("\n  Bundled binaries:");
+    check_binary("opencode", &paths::opencode_bin());
+    check_binary("pi", &paths::pi_bin());
+    println!("  Bundle dir:   {}", paths::bundle_dir().display());
+    if paths::bundle_dir().exists() {
+        println!("    ✓ exists");
+    } else {
+        println!("    ✗ missing — reinstall with `serval update` or the install script");
+    }
+
+    Ok(())
+}
+
+fn check_binary(name: &str, path: &std::path::Path) {
+    if path.exists() {
+        if let Ok(meta) = path.metadata() {
+            let size = meta.len();
+            let kb = size / 1024;
+            let mb = kb / 1024;
+            if mb > 0 {
+                println!("    ✓ {name} ({mb} MB)");
+            } else {
+                println!("    ✓ {name} ({kb} KB)");
+            }
+        } else {
+            println!("    ✓ {name}");
+        }
+    } else {
+        println!("    — {name} not bundled");
+    }
+}
+
+pub fn init() -> Result<(), String> {
+    let cwd = std::env::current_dir().map_err(|e| format!("current dir: {e}"))?;
+    let dest = cwd.join(".serval.jsonc");
+    if dest.exists() {
+        return Err(format!(
+            "{dest:?} already exists. Delete it first if you want to re-initialize."
+        ));
+    }
+    let content = r#"{
+  // ServalAI project config
+  // Model tier for this project: "dynamic/power", "dynamic/balanced" (default), or "dynamic/light"
+  // "model": "dynamic/balanced"
+}
+"#;
+    std::fs::write(&dest, content).map_err(|e| format!("write {dest:?}: {e}"))?;
+    println!("Created {dest:?}");
+    println!("Edit it to pin a model tier for this project.");
+    Ok(())
+}
+
+pub fn report() -> Result<(), String> {
+    let cfg = load();
+    let cwd = std::env::current_dir().map_err(|e| format!("current dir: {e}"))?;
+    let identity = cfg.cached_email.as_deref().unwrap_or("unknown");
+
+    println!("ServalAI Session Report");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Identity:   {identity}");
+    println!("  Directory:  {}", cwd.display());
+    println!();
+
+    println!("  Recent sessions (opencode):");
+    let code_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("~/.local/share"))
+        .join("opencode");
+    if code_dir.exists() && code_dir.is_dir() {
+        let sessions = std::fs::read_dir(&code_dir);
+        let count = match sessions {
+            Ok(entries) => entries.flatten().count(),
+            Err(_) => 0,
+        };
+        println!("    {count} entries in {code_dir:?}");
+    } else {
+        println!("    — no opencode data directory found");
+    }
+
+    println!();
+    println!("  Tools available:");
+    if paths::opencode_bin().exists() {
+        println!("    ✓ opencode");
+    }
+    if paths::pi_bin().exists() {
+        println!("    ✓ pi");
+    }
+    if which::which("aider").is_ok() {
+        println!("    ✓ aider");
+    }
+    Ok(())
+}
+
 pub fn code(passthrough: Vec<String>) -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
@@ -218,7 +424,6 @@ fn convert_agent_to_pi(name: &str, opencode_md: &str) -> String {
         "  - read\n  - grep\n  - glob\n  - bash\n  - edit\n  - write\n  - lsp\n  - web_search"
     };
 
-    // Strip opencode-specific frontmatter and use Pi's YAML format
     let body_lines: Vec<&str> = opencode_md
         .lines()
         .skip_while(|l| l != &"---")
@@ -237,4 +442,37 @@ fn convert_agent_to_pi(name: &str, opencode_md: &str) -> String {
          ---\n\n\
          {body}\n"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_read_only_agent_to_pi() {
+        let input = "---\ndescription: \"System Architect, never writes code\"\nmode: subagent\npermission:\n  edit: deny\n  bash: deny\n---\n\nDo design work.";
+        let result = convert_agent_to_pi("architect", input);
+        assert!(result.contains("name: architect"));
+        assert!(result.contains("description: \"System Architect, never writes code\""));
+        assert!(!result.contains("edit"));
+        assert!(result.contains("Do design work."));
+    }
+
+    #[test]
+    fn convert_writer_agent_to_pi() {
+        let input = "---\ndescription: \"Developer\"\nmode: subagent\npermission:\n  edit: allow\n  bash: ask\n---\n\nYou implement code.";
+        let result = convert_agent_to_pi("developer", input);
+        assert!(result.contains("name: developer"));
+        assert!(result.contains("edit"));
+        assert!(result.contains("bash"));
+        assert!(result.contains("You implement code."));
+    }
+
+    #[test]
+    fn pi_agent_dir_skipped_when_no_agents() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundle = dir.path().join("bundle");
+        std::fs::create_dir_all(&bundle).unwrap();
+        sync_pi_agents(&bundle).unwrap();
+    }
 }

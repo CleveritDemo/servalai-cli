@@ -14,7 +14,7 @@ use clap::{Parser, Subcommand};
     version,
     about = "ServalAI — Cleverit's company-funded model gateway CLI",
     long_about = "One install, one token, and you're coding with a fully-configured opencode\nsession backed by ServalAI.  No config files, no env vars — everything is\ninjected at launch without touching your personal opencode setup.\n\nGet your token at https://cleverit-support.cleveritgroup.com, then run:\n\n    serval auth\n    serval",
-    after_help = "Run `serval status` to see your current configuration.",
+    after_help = "Additional commands: ping, models, usage, doctor, init, report.\nRun `serval status` to see your current configuration.",
     disable_help_subcommand = true
 )]
 struct Cli {
@@ -30,7 +30,7 @@ struct Cli {
 enum Command {
     /// Store your ServalAI token and validate it against the gateway.
     #[command(
-        long_about = "Store your ServalAI token and validate it against the gateway.\n\nIf --token is omitted, you'll be prompted interactively.\nGet your token at https://cleverit-support.cleveritgroup.com"
+        long_about = "Store your ServalAI token and validate it against the gateway.\n\nIf --token is omitted, you'll be prompted interactively.\nYour token is stored in your OS keychain (not a plain file).\nGet your token at https://cleverit-support.cleveritgroup.com"
     )]
     Auth {
         /// Token string (if not provided you'll be prompted).
@@ -45,6 +45,21 @@ enum Command {
     Logout,
     /// Download and install the latest serval release.
     Update,
+    /// Ping the gateway and show available models.
+    Ping,
+    /// List available models from the gateway.
+    Models,
+    /// Show token usage and session statistics.
+    Usage,
+    /// Run diagnostics on your serval installation.
+    #[command(
+        long_about = "Run diagnostics on your serval installation.\n\nChecks: config file permissions, token validity,\ngateway reachability, bundled binary health,\nand bundle directory integrity."
+    )]
+    Doctor,
+    /// Initialize a .serval.jsonc project config in the current directory.
+    Init,
+    /// Generate a summary report of recent activity.
+    Report,
     /// Launch your preconfigured opencode session (this is the default action).
     #[command(
         long_about = "Launch opencode preconfigured with ServalAI as the provider.\n\nRunning `serval` without a subcommand does the same thing.\nAll arguments after `--` are forwarded to opencode.\n\nExamples:\n  serval code\n  serval code -- --print-logs\n  serval"
@@ -87,6 +102,12 @@ fn main() {
         Some(Command::Status) => run(commands::status()),
         Some(Command::Logout) => run(commands::logout()),
         Some(Command::Update) => run(commands::update_cmd()),
+        Some(Command::Ping) => run(commands::ping()),
+        Some(Command::Models) => run(commands::models()),
+        Some(Command::Usage) => run(commands::usage()),
+        Some(Command::Doctor) => run(commands::doctor()),
+        Some(Command::Init) => run(commands::init()),
+        Some(Command::Report) => run(commands::report()),
         Some(Command::Code { args }) => run(commands::code(args)),
         Some(Command::Pi { args }) => run(commands::pi(args)),
         Some(Command::Aider { args }) => run(commands::aider(args)),
@@ -113,6 +134,8 @@ fn main() {
                      \x20 serval             Start coding (opencode)\n\
                      \x20 serval pi          Start oh-my-pi\n\
                      \x20 serval aider       Start aider\n\
+                     \x20 serval ping        Test gateway connectivity\n\
+                     \x20 serval doctor      Run installation diagnostics\n\
                      \x20 serval status      Show your configuration\n\n\
                      Run `serval --help` to see all commands."
                 );
@@ -238,5 +261,41 @@ mod tests {
             cli.command,
             Some(Command::Aider { args }) if args == vec!["--help".to_string()]
         ));
+    }
+
+    #[test]
+    fn ping_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "ping"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Ping)));
+    }
+
+    #[test]
+    fn models_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "models"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Models)));
+    }
+
+    #[test]
+    fn usage_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "usage"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Usage)));
+    }
+
+    #[test]
+    fn doctor_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "doctor"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Doctor)));
+    }
+
+    #[test]
+    fn init_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "init"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Init)));
+    }
+
+    #[test]
+    fn report_subcommand_is_recognized() {
+        let cli = Cli::try_parse_from(["serval", "report"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Report)));
     }
 }

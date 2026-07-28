@@ -131,6 +131,25 @@ fn fallback_provider(cached: Option<&serde_json::Value>) -> serde_json::Value {
     }
 }
 
+pub fn health_check(http: &dyn Http, worker_url: &str) -> Result<String, String> {
+    let url = format!("{}/health", worker_url.trim_end_matches('/'));
+    let resp = http.get_json(&url, "")?;
+    Ok(resp
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("ok")
+        .to_string())
+}
+
+pub fn fetch_usage(
+    http: &dyn Http,
+    worker_url: &str,
+    token: &str,
+) -> Result<serde_json::Value, String> {
+    let url = format!("{}/cli/usage", worker_url.trim_end_matches('/'));
+    http.get_json(&url, token)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
