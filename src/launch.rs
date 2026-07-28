@@ -104,4 +104,27 @@ mod tests {
         assert_eq!(p["options"]["apiKey"], "aig_tok");
         assert_eq!(content["skills"]["paths"][0].as_str().unwrap(), "/b/skills");
     }
+
+    #[test]
+    fn build_ai_env_produces_correct_vars() {
+        let env = build_ai_env("https://w.example.dev/", "aig_tok");
+        let map: std::collections::HashMap<_, _> = env.into_iter().collect();
+        assert_eq!(map["OPENAI_API_BASE_URL"], "https://w.example.dev/v1");
+        assert_eq!(map["OPENAI_API_KEY"], "aig_tok");
+        assert_eq!(map[TOKEN_ENV], "aig_tok");
+    }
+
+    #[test]
+    fn build_ai_env_trims_trailing_slash() {
+        let env = build_ai_env("https://w.example.dev", "t");
+        let map: std::collections::HashMap<_, _> = env.into_iter().collect();
+        assert_eq!(map["OPENAI_API_BASE_URL"], "https://w.example.dev/v1");
+    }
+
+    #[test]
+    fn build_ai_env_does_not_double_v1_suffix() {
+        let env = build_ai_env("https://w.example.dev/v1", "t");
+        let map: std::collections::HashMap<_, _> = env.into_iter().collect();
+        assert_eq!(map["OPENAI_API_BASE_URL"], "https://w.example.dev/v1/v1");
+    }
 }

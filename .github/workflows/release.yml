@@ -35,6 +35,8 @@ jobs:
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Run tests
+        run: cargo test --target ${{ matrix.target }}
       - name: Assemble bundle
         run: |
           stage="stage/serval-${{ matrix.target }}"

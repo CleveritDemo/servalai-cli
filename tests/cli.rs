@@ -17,9 +17,6 @@ fn status_runs_without_token() {
 
 #[test]
 fn code_without_token_errors_cleanly() {
-    // The binary runs against the real config file, so we can't know if a token
-    // is present. Instead, assert that `code` produces non-zero exit code and a
-    // meaningful message (auth or exec failure).
     let out = serval().arg("code").output().unwrap();
     assert!(!out.status.success());
     let err = String::from_utf8(out.stderr).unwrap();
@@ -28,4 +25,34 @@ fn code_without_token_errors_cleanly() {
             || err.contains("failed to exec")
             || err.contains("No such file")
     );
+}
+
+#[test]
+fn version_subcommand_shows_version() {
+    let out = serval().arg("version").output().unwrap();
+    assert!(out.status.success());
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert!(s.contains("serval"));
+}
+
+#[test]
+fn help_subcommand_shows_help() {
+    let out = serval().arg("help").output().unwrap();
+    assert!(out.status.success());
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert!(s.contains("Usage"));
+}
+
+#[test]
+fn unknown_command_prints_error() {
+    let out = serval().arg("foobar").output().unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("not a serval command"));
+}
+
+#[test]
+fn logout_succeeds_without_config() {
+    let out = serval().arg("logout").output().unwrap();
+    assert!(out.status.success());
 }
