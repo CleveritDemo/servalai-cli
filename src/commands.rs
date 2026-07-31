@@ -157,7 +157,10 @@ pub fn ping() -> Result<(), String> {
 
     // Try to fetch provider config to show available models
     if let Ok(token) = require_token(&cfg) {
-        match fetch_config(&UreqHttp, &cfg.worker_url, &token) {
+        let spinner = crate::progress::Spinner::start("Fetching models…");
+        let fc = fetch_config(&UreqHttp, &cfg.worker_url, &token);
+        spinner.finish_silent();
+        match fc {
             Ok(fc) if !fc.models.is_empty() => {
                 println!("\nAvailable models:");
                 for m in &fc.models {
@@ -367,7 +370,7 @@ pub fn report() -> Result<(), String> {
 pub fn code(passthrough: Vec<String>) -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
-    println!(
+    eprintln!(
         "{}",
         crate::progress::banner(crate::progress::is_interactive())
     );
