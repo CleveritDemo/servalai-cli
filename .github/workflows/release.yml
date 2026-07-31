@@ -8,6 +8,16 @@ env:
   CARGO_TERM_COLOR: always
   OPENCODE_VERSION: "1.18.7"
   OMP_VERSION: "v17.1.6"
+# Note: this workflow does NOT run `cargo test` per cross-compiled target.
+# ci.yml already runs the full suite (native target) on every push to main,
+# including the commit a release tag points at. A per-target test step was
+# tried here between v0.1.10 and v0.1.11 and broke 3 of 4 platform builds:
+# `ring`'s build script needs a target C toolchain that only `cargo-zigbuild`
+# (used for the actual release build, not for `cargo test`) provides, and
+# cross-arch test binaries (e.g. aarch64 on an x86_64 runner) can't execute
+# without emulation anyway. Both v0.1.10 and v0.1.11 shipped with only the
+# aarch64-apple-darwin asset as a result. Do not re-add a bare `cargo test
+# --target ...` step here without also solving both of those problems.
 jobs:
   build:
     name: ${{ matrix.target }}
@@ -35,8 +45,6 @@ jobs:
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: cargo build --release --target ${{ matrix.target }}
-      - name: Run tests
-        run: cargo test --target ${{ matrix.target }}
       - name: Assemble bundle
         run: |
           stage="stage/serval-${{ matrix.target }}"
