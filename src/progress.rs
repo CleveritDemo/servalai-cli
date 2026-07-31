@@ -3,7 +3,6 @@
 //!
 //! Fully inert (no ANSI, no background thread) when stdout/stderr aren't a
 //! TTY or `NO_COLOR` is set — critical for CI logs and piped output.
-#![allow(dead_code)]
 
 const ACCENT: &str = "\x1b[36m";
 const DIM: &str = "\x1b[2m";

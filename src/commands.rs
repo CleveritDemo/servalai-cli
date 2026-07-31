@@ -148,8 +148,10 @@ pub fn update_cmd() -> Result<(), String> {
 
 pub fn ping() -> Result<(), String> {
     let cfg = load();
+    let spinner = crate::progress::Spinner::start("Contacting gateway…");
     let status = health_check(&UreqHttp, &cfg.worker_url)
         .map_err(|e| format!("gateway unreachable: {e}"))?;
+    spinner.finish_silent();
     println!("Gateway: {}", cfg.worker_url);
     println!("Status:  {status}");
 
@@ -174,8 +176,10 @@ pub fn ping() -> Result<(), String> {
 pub fn models() -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
+    let spinner = crate::progress::Spinner::start("Contacting gateway…");
     let fc = fetch_config(&UreqHttp, &cfg.worker_url, &token)
         .map_err(|e| format!("could not fetch model list: {e}"))?;
+    spinner.finish_silent();
 
     println!("ServalAI Models");
     println!("━━━━━━━━━━━━━━━");
@@ -199,7 +203,9 @@ pub fn models() -> Result<(), String> {
 pub fn usage() -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
+    let spinner = crate::progress::Spinner::start("Contacting gateway…");
     let data = fetch_usage(&UreqHttp, &cfg.worker_url, &token)?;
+    spinner.finish_silent();
 
     println!("ServalAI Usage");
     println!("━━━━━━━━━━━━━━");
@@ -257,7 +263,10 @@ pub fn doctor() -> Result<(), String> {
 
     // 3. Gateway
     println!("  Gateway:      {}", cfg.worker_url);
-    match health_check(&UreqHttp, &cfg.worker_url) {
+    let spinner = crate::progress::Spinner::start("Checking gateway…");
+    let health = health_check(&UreqHttp, &cfg.worker_url);
+    spinner.finish_silent();
+    match health {
         Ok(s) => println!("    ✓ reachable (status: {s})"),
         Err(e) => println!("    ✗ unreachable: {e}"),
     }
