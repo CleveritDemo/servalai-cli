@@ -39,12 +39,17 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
         ));
     }
     cfg.token = Some(token.clone());
-    let (provider, email) = resolve_config(
+    let spinner = crate::progress::Spinner::start("Contacting gateway…");
+    let (provider, email, fallback_note) = resolve_config(
         &UreqHttp,
         &cfg.worker_url,
         &token,
         cfg.cached_provider.as_ref(),
     );
+    match fallback_note {
+        Some(note) => spinner.finish_note(&note),
+        None => spinner.finish_silent(),
+    }
     cfg.cached_provider = Some(provider);
     cfg.cached_email = email.clone();
     cfg.save(&paths::config_file())?;
@@ -61,12 +66,17 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
 pub fn sync() -> Result<(), String> {
     let mut cfg = load();
     let token = require_token(&cfg)?;
-    let (provider, email) = resolve_config(
+    let spinner = crate::progress::Spinner::start("Contacting gateway…");
+    let (provider, email, fallback_note) = resolve_config(
         &UreqHttp,
         &cfg.worker_url,
         &token,
         cfg.cached_provider.as_ref(),
     );
+    match fallback_note {
+        Some(note) => spinner.finish_note(&note),
+        None => spinner.finish_silent(),
+    }
     cfg.cached_provider = Some(provider);
     if email.is_some() {
         cfg.cached_email = email;
@@ -348,12 +358,21 @@ pub fn report() -> Result<(), String> {
 pub fn code(passthrough: Vec<String>) -> Result<(), String> {
     let cfg = load();
     let token = require_token(&cfg)?;
-    let (provider, _) = resolve_config(
+    println!(
+        "{}",
+        crate::progress::banner(crate::progress::is_interactive())
+    );
+    let spinner = crate::progress::Spinner::start("Connecting to gateway…");
+    let (provider, _, fallback_note) = resolve_config(
         &UreqHttp,
         &cfg.worker_url,
         &token,
         cfg.cached_provider.as_ref(),
     );
+    match fallback_note {
+        Some(note) => spinner.finish_note(&note),
+        None => spinner.finish_silent(),
+    }
     let env = build_env(&provider, &cfg.worker_url, &token, &paths::bundle_dir());
     ExecLauncher.exec(&paths::opencode_bin(), &passthrough, &env)
 }
