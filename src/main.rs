@@ -4,6 +4,7 @@ mod config;
 mod constants;
 mod launch;
 mod paths;
+mod progress;
 mod update;
 
 use clap::{Parser, Subcommand};
