@@ -15,7 +15,7 @@ use clap::{Parser, Subcommand};
     version,
     about = "ServalAI — Cleverit's company-funded model gateway CLI",
     long_about = "One install, one token, and you're coding with a fully-configured opencode\nsession backed by ServalAI.  No config files, no env vars — everything is\ninjected at launch without touching your personal opencode setup.\n\nGet your token at https://cleverit-support.cleveritgroup.com, then run:\n\n    serval auth\n    serval",
-    after_help = "Additional commands: ping, models, usage, doctor, init, report.\nRun `serval status` to see your current configuration.",
+    after_help = "Additional commands: ping, models, usage, doctor, init, report, pi, aider.\nRun `serval status` to see your current configuration.",
     disable_help_subcommand = true
 )]
 struct Cli {

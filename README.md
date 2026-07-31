@@ -58,10 +58,20 @@ Pick your platform from the [releases page](https://github.com/CleveritDemo/serv
 | `serval` | Launch opencode preconfigured with ServalAI. |
 | `serval code` | Same as above. |
 | `serval code -- --print-logs` | Launch opencode with extra flags. |
+| `serval pi` | Launch [oh-my-pi](https://github.com/anomalyco/oh-my-pi) preconfigured with ServalAI (bundled). |
+| `serval aider` | Launch [aider](https://aider.chat) preconfigured with ServalAI (requires aider on your `PATH`). |
 | `serval status` | Show version, bundled opencode, gateway URL, and identity. |
 | `serval sync` | Refresh your provider config from the gateway. |
+| `serval ping` | Check gateway connectivity and list your available models. |
+| `serval models` | List available models for your account, with descriptions. |
+| `serval usage` | Show token usage and session statistics. |
+| `serval doctor` | Run diagnostics: config permissions, token, gateway reachability, bundled binaries. |
+| `serval init` | Create a `.serval.jsonc` in the current directory to pin a model tier for that project. |
+| `serval report` | Summarize recent activity: identity, working directory, opencode session count, available tools. |
 | `serval update` | Self-update to the latest release. |
 | `serval logout` | Clear your token from this machine. |
+
+Run `serval --help` any time for the full, always-current list.
 
 ### Getting your token
 
@@ -130,8 +140,21 @@ serval ──sets env vars──▶ opencode (bundled, pinned version)
 ```
 
 - **Never touches your files.** opencode merges ServalAI's config with your existing `~/.config/opencode/` and project `.opencode/`. Your personal setup is preserved.
-- **Degrades gracefully.** If the gateway is unreachable, `serval` falls back to cached config, then to an embedded default — you can still work.
+- **Degrades gracefully.** If the gateway is unreachable, `serval` falls back to cached config, then to an embedded default — you can still work. This shows as a muted `○ using ... config — ...` note, never as an error: the command still succeeded.
 - **Self-updating.** `serval update` fetches the latest release and atomically swaps the install directory. Agents, skills, and MCP config stay current fleet-wide.
+
+### What you'll see on launch
+
+Plain `serval` prints its wordmark and an animated spinner while it contacts the gateway, so you always know it's working, not stuck:
+
+```
+ServalAI
+a Cleverit company · powered by Raven
+
+⠙ Connecting to gateway…
+```
+
+Every other gateway-touching command (`auth`, `sync`, `ping`, `models`, `usage`, `doctor`) shows the same spinner without the banner. All of this is fully inert — no animation, no color, no extra output — when `serval`'s output isn't a real terminal (piped, scripted, CI) or when `NO_COLOR` is set.
 
 ---
 
@@ -153,8 +176,8 @@ serval ──sets env vars──▶ opencode (bundled, pinned version)
 **`serval: command not found`**
 Add `~/.local/bin` to your `PATH` and restart your terminal.
 
-**`serval` hangs on launch**
-The gateway may be unreachable. `serval` has a 5-second connection timeout — if it hangs longer, check your network/VPN.
+**`serval` seems to pause after the banner**
+That's the spinner working, not a hang — `serval` is contacting the gateway (5-second connect / 20-second read timeout). If the gateway can't be reached at all, it falls back to cached or default config within a few seconds and still launches; run `serval doctor` to check gateway reachability directly.
 
 **"you haven't authenticated yet"**
 Run `serval auth` and paste your token from Mi Portal.
