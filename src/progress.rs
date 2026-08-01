@@ -51,9 +51,16 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Floor on how long an animated spinner stays visible, even when the work
+/// it's covering finishes almost instantly (e.g. a fast HTTP error). Without
+/// this, a near-instant resolve can flash for a fraction of a frame — too
+/// fast to register as "serval did something." Not applied on the
+/// non-animated path: nothing is watching a pipe/CI log for motion.
+const MIN_VISIBLE: Duration = Duration::from_millis(500);
 
 /// An animated "still working" indicator for network waits. Renders on
 /// stderr only — stdout stays reserved for actual command output.
@@ -65,6 +72,7 @@ pub struct Spinner {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
     colored: bool,
+    started_at: Instant,
 }
 
 impl Spinner {
@@ -80,6 +88,7 @@ impl Spinner {
                 stop: Arc::new(AtomicBool::new(false)),
                 handle: None,
                 colored: false,
+                started_at: Instant::now(),
             };
         }
         let stop = Arc::new(AtomicBool::new(false));
@@ -98,11 +107,19 @@ impl Spinner {
             stop,
             handle: Some(handle),
             colored: true,
+            started_at: Instant::now(),
         }
     }
 
     fn stop_thread(&mut self) {
         if let Some(handle) = self.handle.take() {
+            // Keep the spinner animating (it's still spinning on its own
+            // thread) until MIN_VISIBLE has elapsed, so a near-instant
+            // resolve doesn't flash for an imperceptible fraction of a frame.
+            let elapsed = self.started_at.elapsed();
+            if elapsed < MIN_VISIBLE {
+                std::thread::sleep(MIN_VISIBLE - elapsed);
+            }
             self.stop.store(true, Ordering::Relaxed);
             let _ = handle.join();
             eprint!("\x1b[2K\r");
@@ -218,5 +235,34 @@ mod tests {
         let spinner = Spinner::start_with("test message", true);
         std::thread::sleep(std::time::Duration::from_millis(50));
         drop(spinner);
+    }
+
+    /// A gateway call that resolves near-instantly (e.g. a fast HTTP error
+    /// response) must still leave the spinner visible for a perceivable
+    /// minimum stretch — otherwise it's a flash nobody registers seeing.
+    #[test]
+    fn animated_spinner_has_a_minimum_visible_duration() {
+        let started = std::time::Instant::now();
+        let spinner = Spinner::start_with("test message", true);
+        spinner.finish_silent(); // no artificial delay before finishing
+        assert!(
+            started.elapsed() >= Duration::from_millis(450),
+            "expected at least ~500ms of visible spinner time, got {:?}",
+            started.elapsed()
+        );
+    }
+
+    /// The non-animated (piped/CI/NO_COLOR) path is for machines, not human
+    /// eyes — it must never be padded with an artificial delay.
+    #[test]
+    fn non_animated_spinner_has_no_minimum_duration_padding() {
+        let started = std::time::Instant::now();
+        let spinner = Spinner::start_with("test message", false);
+        spinner.finish_silent();
+        assert!(
+            started.elapsed() < Duration::from_millis(200),
+            "non-animated path should return immediately, took {:?}",
+            started.elapsed()
+        );
     }
 }

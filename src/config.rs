@@ -32,24 +32,57 @@ impl Default for Config {
     }
 }
 
+/// Abstracts OS keychain access so `Config::load`/`save` can be exercised in
+/// tests without touching the real system keychain. On macOS, a real
+/// keychain access prompts the user for a permission dialog — and does so
+/// on *every* freshly rebuilt (unsigned) debug binary, since each build has
+/// a different code identity. A unit test must never trigger that.
+trait Keychain {
+    fn get(&self) -> Result<Option<String>, String>;
+    fn set(&self, token: &str) -> Result<(), String>;
+    fn delete(&self) -> Result<(), String>;
+}
+
+struct OsKeychain;
+
+impl Keychain for OsKeychain {
+    fn get(&self) -> Result<Option<String>, String> {
+        keychain_get()
+    }
+    fn set(&self, token: &str) -> Result<(), String> {
+        keychain_set(token)
+    }
+    fn delete(&self) -> Result<(), String> {
+        keychain_delete()
+    }
+}
+
 impl Config {
     pub fn load(path: &Path) -> Config {
+        Self::load_with(path, &OsKeychain)
+    }
+
+    fn load_with(path: &Path, keychain: &dyn Keychain) -> Config {
         let mut cfg: Config = match std::fs::read_to_string(path) {
             Ok(s) => toml::from_str(&s).unwrap_or_default(),
             Err(_) => Config::default(),
         };
         if cfg.use_keychain && cfg.token.is_none() {
-            cfg.token = keychain_get().ok().flatten();
+            cfg.token = keychain.get().ok().flatten();
         }
         cfg
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
+        self.save_with(path, &OsKeychain)
+    }
+
+    fn save_with(&self, path: &Path, keychain: &dyn Keychain) -> Result<(), String> {
         if self.use_keychain {
             if let Some(t) = &self.token {
-                keychain_set(t)?;
+                keychain.set(t)?;
             } else {
-                keychain_delete().ok();
+                keychain.delete().ok();
             }
         }
         let stripped = Config {
@@ -129,14 +162,56 @@ fn keychain_delete() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
     use tempfile::tempdir;
+
+    /// In-memory stand-in for the real OS keychain — never touches the
+    /// system, so tests can exercise `use_keychain: true` (the default)
+    /// without triggering a real permission prompt.
+    struct FakeKeychain {
+        stored: RefCell<Option<String>>,
+    }
+
+    impl FakeKeychain {
+        fn empty() -> Self {
+            FakeKeychain {
+                stored: RefCell::new(None),
+            }
+        }
+    }
+
+    impl Keychain for FakeKeychain {
+        fn get(&self) -> Result<Option<String>, String> {
+            Ok(self.stored.borrow().clone())
+        }
+        fn set(&self, token: &str) -> Result<(), String> {
+            *self.stored.borrow_mut() = Some(token.to_string());
+            Ok(())
+        }
+        fn delete(&self) -> Result<(), String> {
+            *self.stored.borrow_mut() = None;
+            Ok(())
+        }
+    }
 
     #[test]
     fn load_missing_returns_defaults() {
         let dir = tempdir().unwrap();
-        let cfg = Config::load(&dir.path().join("nope.toml"));
+        let cfg = Config::load_with(&dir.path().join("nope.toml"), &FakeKeychain::empty());
         assert_eq!(cfg.worker_url, DEFAULT_WORKER_URL);
         assert!(cfg.token.is_none());
+    }
+
+    #[test]
+    fn load_missing_with_use_keychain_default_reads_the_injected_keychain() {
+        // Regression guard: confirms load_with actually consults the
+        // keychain when use_keychain is true (the compiled default) and no
+        // token is on disk — using the fake, never the real OS keychain.
+        let dir = tempdir().unwrap();
+        let keychain = FakeKeychain::empty();
+        keychain.set("aig_from_keychain").unwrap();
+        let cfg = Config::load_with(&dir.path().join("nope.toml"), &keychain);
+        assert_eq!(cfg.token.as_deref(), Some("aig_from_keychain"));
     }
 
     #[test]

@@ -149,12 +149,10 @@ fn main() {
 
 fn run(result: Result<(), String>) {
     if let Err(e) = result {
-        let hint = if e.contains("haven't authenticated") || e.contains("no token") {
-            "\nHint: get your token at https://cleverit-support.cleveritgroup.com, then run `serval auth`.\n"
-        } else {
-            "\n"
-        };
-        eprintln!("serval: {e}{hint}");
+        // Error messages that need a "get your token" pointer already include
+        // one at the point of construction (see commands::require_token and
+        // commands::auth) — don't repeat it here.
+        eprintln!("serval: {e}\n");
         std::process::exit(1);
     }
 }

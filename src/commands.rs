@@ -19,6 +19,58 @@ fn require_token(cfg: &Config) -> Result<String, String> {
     })
 }
 
+/// Applies a freshly-provided token to `cfg`, also resetting `worker_url` to
+/// the build's compiled default.
+///
+/// `worker_url` is persisted in config.toml but has no user-facing override
+/// (no flag, no env var) — it exists only to remember "the gateway this CLI
+/// talks to." When `DEFAULT_WORKER_URL` changes across releases (as it did
+/// between v0.1.9 and v0.1.10), anyone who first authenticated on an older
+/// build is left with the old value baked into their file forever: nothing
+/// else in the CLI ever touches `worker_url`, so without this reset even a
+/// fresh `serval auth` can't self-heal a stale gateway.
+fn apply_new_token(cfg: &mut Config, token: &str) {
+    cfg.token = Some(token.to_string());
+    cfg.worker_url = crate::constants::DEFAULT_WORKER_URL.to_string();
+}
+
+/// Reads one line from stdin with terminal echo disabled (via `stty -echo`),
+/// so a pasted/typed secret isn't shown on screen or left in scrollback.
+/// Best-effort: if `stty` isn't available (stdin isn't a real terminal, or
+/// the platform lacks it), falls back to a normal, visible read rather than
+/// failing the whole command — masking is a courtesy, not a hard requirement.
+fn read_line_masked() -> Result<String, String> {
+    // stty prints its own diagnostics (e.g. "stdin isn't a terminal") to
+    // stdout/stderr when it can't do anything — that's expected whenever
+    // stdin isn't a real TTY, and must never leak onto the user's screen.
+    let echo_was_disabled = std::process::Command::new("stty")
+        .arg("-echo")
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+
+    let mut s = String::new();
+    let result = std::io::stdin().read_line(&mut s);
+
+    if echo_was_disabled {
+        // Restore echo before doing anything else, even on a failed read.
+        let _ = std::process::Command::new("stty")
+            .arg("echo")
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        // The Enter that submitted the line was never echoed either.
+        eprintln!();
+    }
+
+    result.map_err(|e| e.to_string())?;
+    Ok(s.trim().to_string())
+}
+
 pub fn auth(token: Option<String>) -> Result<(), String> {
     let mut cfg = load();
     let token = match token {
@@ -26,11 +78,7 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
         None => {
             eprint!("Paste your ServalAI token (from {TOKEN_URL}): ");
             std::io::stderr().flush().ok();
-            let mut s = String::new();
-            std::io::stdin()
-                .read_line(&mut s)
-                .map_err(|e| format!("could not read token: {e}"))?;
-            s.trim().to_string()
+            read_line_masked().map_err(|e| format!("could not read token: {e}"))?
         }
     };
     if token.is_empty() {
@@ -38,7 +86,7 @@ pub fn auth(token: Option<String>) -> Result<(), String> {
             "no token provided.\nGet yours at {TOKEN_URL} and run `serval auth` again."
         ));
     }
-    cfg.token = Some(token.clone());
+    apply_new_token(&mut cfg, &token);
     let spinner = crate::progress::Spinner::start("Contacting gateway…");
     let (provider, email, fallback_note) = resolve_config(
         &UreqHttp,
@@ -478,6 +526,32 @@ fn convert_agent_to_pi(name: &str, opencode_md: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apply_new_token_sets_token_and_resets_worker_url_to_default() {
+        let mut cfg = Config {
+            token: None,
+            worker_url: "https://old-stale-gateway.example.com".to_string(),
+            ..Config::default()
+        };
+        apply_new_token(&mut cfg, "aig_fresh_token");
+        assert_eq!(cfg.token.as_deref(), Some("aig_fresh_token"));
+        assert_eq!(cfg.worker_url, crate::constants::DEFAULT_WORKER_URL);
+    }
+
+    #[test]
+    fn apply_new_token_resets_worker_url_even_when_already_current() {
+        // Re-authenticating on an up-to-date config must still leave
+        // worker_url pointed at the compiled default, not just "unchanged".
+        let mut cfg = Config {
+            token: Some("aig_old_token".to_string()),
+            worker_url: crate::constants::DEFAULT_WORKER_URL.to_string(),
+            ..Config::default()
+        };
+        apply_new_token(&mut cfg, "aig_new_token");
+        assert_eq!(cfg.token.as_deref(), Some("aig_new_token"));
+        assert_eq!(cfg.worker_url, crate::constants::DEFAULT_WORKER_URL);
+    }
 
     #[test]
     fn convert_read_only_agent_to_pi() {
